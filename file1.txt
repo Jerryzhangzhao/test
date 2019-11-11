@@ -1,1 +1,384 @@
-file1
+import processing.opengl.*; 
+import KinectPV2.*;
+import blobDetection.*; 
+import toxi.geom.*; 
+import toxi.processing.*;
+import shiffman.box2d.*; 
+import org.jbox2d.collision.shapes.*; 
+import org.jbox2d.common.*; 
+import org.jbox2d.dynamics.*;
+import java.util.Collections; 
+import gab.opencv.*;
+
+OpenCV opencv,adImage;
+
+KinectPV2 kinect; 
+BlobDetection theBlobDetection;
+
+ToxiclibsSupport gfx;     //toxiclibsSupport 显示多边形
+PolygonBlob poly;         //声明自定义PolygonBlob对象; PolygonBlob类定义在ploygon2D.pde
+PImage cam, blobs,dst;        //用于保存传入图像的PImage和用于blob检测的较小图像
+
+ArrayList<HumanPolygonBlob> humanPolygonsList;
+
+//Kinect深度图像的宽和高
+int kinectWidth = 400;
+int kinectHeight = 800;
+//int kinectWidth = 640;
+//int kinectHeight = 480;
+
+float reScale;
+
+Box2DProcessing box2d;
+
+//定义一个多边形列表
+ArrayList<CustomShape> polygonsList = new ArrayList<CustomShape>();
+
+ArrayList<Contour> contours_opencv;
+PImage  img, thresh, blur, adaptive, adImg;
+
+boolean isHumanExist = false;
+
+boolean timeRecord1=false;
+double timeValue1=0;
+
+//时间点记录
+double humanInTime = 0;
+double humanOutTime = 0;
+boolean humanInTimeSaved = false;
+boolean humanOutTimeSaved = false;
+
+//时间长度设置
+double heyFadeOutTime = 5;
+double interactionTime = 300;
+double byeFadeInTime = 5;
+double heyShowAfterByeTime = 5;
+
+boolean isFirst = true;
+
+//hey bey文字位置
+int heyText_X = 540;
+int heyText_Y = 960;
+
+
+int humanExistList[]= new int [5];
+PImage bearImg1,bearImg2,bearImg3;
+float transparency = 255;
+float bgColor = 0;
+int step=1;
+int humanExistCount = 0;
+int humanNotExistCount = 0;
+
+void setup() 
+{
+	size(1080, 1920, P3D);					      //设置窗口大小
+  //size(1080, 1920, P3D);                //设置窗口大小
+
+	kinect = new KinectPV2(this); 			//创建Kinect对象
+	kinect.enableBodyTrackImg(true);		//使能Kinect人体追踪 
+	kinect.init(); //Kinect初始化
+	
+  adImage = new OpenCV(this, "fengjing.jpg", true);
+
+  frameRate(50);
+
+	reScale = (float) width / kinectWidth;	//缩放因子，显示窗口大小 vs. kinect图像大小
+	
+	blobs = createImage(kinectWidth/3, kinectHeight/3, RGB); 
+	
+	//设置BlobDetection对象
+	theBlobDetection = new BlobDetection(blobs.width, blobs.height); 
+  //设置blob检测阈值
+	theBlobDetection.setThreshold(0.2);  
+
+	gfx = new ToxiclibsSupport(this);
+	
+	box2d = new Box2DProcessing(this);   //创建box2D
+	box2d.createWorld();					       //创建box2D世界
+	box2d.setGravity(0, -20);				     //设置重力（包括方向和大小）
+ 
+  textSize(300);
+  textAlign(CENTER);
+  
+  for(int i=0;i<humanExistList.length;i++)
+  {
+       humanExistList[i] = 0;
+  }
+  
+  bearImg1 = loadImage("gunmmy bear_BW.png");
+  bearImg2 = loadImage("gunmmy bear_Colar.png");
+  bearImg3 = loadImage("gunmmy bear_Pink.png");
+  
+}
+
+void draw() 
+{ 
+	background(0);                    //设置背景颜色
+
+	cam = kinect.getBodyTrackImage();		//获取人体追踪图像
+	blobs.copy(cam, 0, 0, cam.width, cam.height, 0, 0, blobs.width,blobs.height); 	//copy image data
+
+  blobs.loadPixels();
+  int pixCnt = blobs.width * blobs.height;
+  for (int i = 0; i < pixCnt; i += 1) {     
+    //println(blobs.pixels[i]);
+    if(blobs.pixels[i] > -10)
+    {
+        blobs.pixels[i] = color(5); 
+    }
+    else
+    {
+        blobs.pixels[i] = color(255); 
+    }
+       
+  } 
+  blobs.updatePixels();
+  
+  //opencv
+  opencv = new OpenCV(this, blobs);
+  
+  thresh = opencv.getSnapshot();
+  adImg = adImage.getSnapshot();
+  
+  opencv.gray();
+  opencv.threshold(20);
+  dst = opencv.getOutput();
+
+  contours_opencv = opencv.findContours();
+  
+  humanPolygonsList = new ArrayList<HumanPolygonBlob>();
+
+  int num = 0;
+  //isHumanExist = false;
+  humanExistList[humanExistList.length-1] = 0;
+  for (int i=0; i<contours_opencv.size();i++)
+  {
+      if(contours_opencv.get(i).area()>100)
+      {
+        //isHumanExist = true;
+        humanExistList[humanExistList.length-1] = 1;
+        ArrayList<PVector> contour = new ArrayList<PVector>();
+        int k = 0;
+        for (PVector point : contours_opencv.get(i).getPoints())
+        {
+          k++;
+          point.x *= 3;
+          point.y *= 3;
+  
+          contour.add(point);
+        }
+        
+        HumanPolygonBlob humanPolygonBlob = new HumanPolygonBlob();
+        humanPolygonsList.add(humanPolygonBlob);
+        
+        humanPolygonsList.get(num).setContour(contour);
+        humanPolygonsList.get(num).createPolygon();
+        humanPolygonsList.get(num).createBody();
+        num++;
+      }
+  }
+  
+  for(int i=0;i<humanExistList.length-1;i++)
+  {
+      humanExistList[i] = humanExistList[i+1];
+  }
+  
+  int existSumNum = 0;
+  for(int i=0;i<humanExistList.length;i++)
+  {
+     existSumNum += humanExistList[i];
+  }
+  
+  if(existSumNum == 0)
+  {
+    humanNotExistCount++;
+    humanExistCount=0;
+    if(humanNotExistCount>10)
+    {
+      humanNotExistCount = 0;
+      isHumanExist = false;
+    }
+  }
+  else
+  {
+    humanExistCount++;
+    humanNotExistCount=0;
+    if(humanExistCount>10)
+    {
+      humanExistCount = 0;
+      isHumanExist = true;
+    }
+  }
+  
+  //human exist or not
+  if(isHumanExist == false )
+  {
+    //状态清零
+    humanInTimeSaved = false;
+    
+    if(isFirst)
+    {
+       pushMatrix();
+       fill(255);
+       text("Hey!",heyText_X,heyText_Y); //显示
+       popMatrix();
+       return;
+    }
+    
+    if(humanOutTimeSaved == false)
+    {
+      humanOutTimeSaved = true;
+      humanOutTime = millis()/1000.0;
+    }
+    
+    box2d.setGravity(0, 40);
+     
+    if(millis()/1000.0 - humanOutTime < byeFadeInTime)
+    {
+       bgColor -= 285/byeFadeInTime/50.0;
+       if(bgColor < 0)
+       {
+         bgColor = 0;
+       } 
+    }
+
+     pushMatrix();
+     background(bgColor);
+     popMatrix();
+       
+    if(millis()/1000.0 - humanOutTime < byeFadeInTime + heyShowAfterByeTime)
+    {
+       pushMatrix();
+       fill(255);
+       text("Bye!",heyText_X,heyText_Y); //显示
+       popMatrix();
+    }
+    else
+    {
+       pushMatrix();
+       fill(255);
+       text("Hey!",heyText_X,heyText_Y); //显示
+       popMatrix();
+    }
+  }
+  else
+  {
+    isFirst = false;
+    
+     //状态清零
+    humanOutTimeSaved = false;
+    
+    pushMatrix();
+    fill(255);
+    text("Hey!",heyText_X,heyText_Y); //显示
+    popMatrix();
+    
+    
+    if(humanInTimeSaved == false)
+    {
+      humanInTimeSaved = true;
+      humanInTime = millis()/1000.0;
+    }
+    
+    if(humanInTimeSaved)
+    {
+       if(millis()/1000.0 - humanInTime < heyFadeOutTime)
+       {
+           box2d.setGravity(0, -20);
+           
+           bgColor += 285/heyFadeOutTime/50.0;
+           if(bgColor > 255)
+           {
+             bgColor = 255;
+           }
+          
+       }
+       
+       pushMatrix();
+       background(bgColor);
+       popMatrix();
+         
+       pushMatrix();
+       fill(255);
+       text("Hey!",heyText_X,heyText_Y); //显示
+       popMatrix();
+       
+       if(millis()/1000.0 - humanInTime > heyFadeOutTime + interactionTime )
+       {
+          box2d.setGravity(0, 20);
+       }
+    }
+    
+  }
+  
+  
+	updateAndDrawBox2D(); //update 
+
+  for(int i=0;i<humanPolygonsList.size();i++)
+  {
+     humanPolygonsList.get(i).destroyBody();
+  }
+  humanPolygonsList.clear();
+  
+  //pushMatrix();
+  //scale(0.5);
+  //image(thresh, 100, 200);  //显示人体二值图像
+  //popMatrix();
+  
+  //text(millis()/1000.0,360,360); //显示计时器
+}
+
+void updateAndDrawBox2D() 
+{ 
+  if (frameRate > 29 && isHumanExist) 
+	{
+     //添加小球，参数分别为 (x,y,r)
+		 polygonsList.add(new CustomShape(kinectWidth/2, -190, random(5,10)));	
+   }
+	box2d.step();   //在box2d世界中向前一步
+
+  //从kinect图像坐标转换到显示坐标
+	translate(0, (height-kinectHeight*reScale)/2); 
+	scale(reScale);
+	
+	//显示人物多边形
+	noStroke();
+  
+  fill(89,137,182);  //设置人体颜色
+  
+  for(int i = 0; i < humanPolygonsList.size(); i++)
+  {
+    fill(89,137,182);  //设置人体颜色
+    gfx.polygon2D(humanPolygonsList.get(i));
+  }
+	
+	for (int i = polygonsList.size()-1; i >= 0; i--) 
+	{ 
+		CustomShape cs = polygonsList.get(i); 
+		if (cs.done()) 
+		{ 
+      //如果形状运动到屏幕之外，则移除
+			polygonsList.remove(i);
+		} 
+		else 
+		{ 
+      //更新和显示
+			cs.update();
+			cs.display();
+		}
+	}
+
+  for (Contour contour : contours_opencv) {
+    //stroke(0, 255, 0);
+    //contour.draw();
+    
+    //stroke(255, 0, 0);
+    //beginShape();
+    //for (PVector point : contour.getPolygonApproximation().getPoints()) {
+    //  vertex(point.x, point.y);
+    //}
+    //endShape();
+  }
+
+
+}
