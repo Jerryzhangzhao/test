@@ -22,10 +22,8 @@ PImage cam, blobs,dst;        //用于保存传入图像的PImage和用于blob�
 ArrayList<HumanPolygonBlob> humanPolygonsList;
 
 //Kinect深度图像的宽和高
-int kinectWidth = 400;
-int kinectHeight = 800;
-//int kinectWidth = 640;
-//int kinectHeight = 480;
+int kinectWidth = 640;
+int kinectHeight = 480;
 
 float reScale;
 
@@ -50,15 +48,15 @@ boolean humanOutTimeSaved = false;
 
 //时间长度设置
 double heyFadeOutTime = 5;
-double interactionTime = 300;
+double interactionTime = 20;
 double byeFadeInTime = 5;
 double heyShowAfterByeTime = 5;
 
 boolean isFirst = true;
 
 //hey bey文字位置
-int heyText_X = 540;
-int heyText_Y = 960;
+int heyText_X = 200;
+int heyText_Y = 200;
 
 
 int humanExistList[]= new int [5];
@@ -71,7 +69,7 @@ int humanNotExistCount = 0;
 
 void setup() 
 {
-	size(1080, 1920, P3D);					      //设置窗口大小
+	size(1280, 960, P3D);					      //设置窗口大小
   //size(1080, 1920, P3D);                //设置窗口大小
 
 	kinect = new KinectPV2(this); 			//创建Kinect对象
@@ -97,7 +95,7 @@ void setup()
 	box2d.createWorld();					       //创建box2D世界
 	box2d.setGravity(0, -20);				     //设置重力（包括方向和大小）
  
-  textSize(300);
+  textSize(64);
   textAlign(CENTER);
   
   for(int i=0;i<humanExistList.length;i++)
@@ -325,7 +323,7 @@ void draw()
   //image(thresh, 100, 200);  //显示人体二值图像
   //popMatrix();
   
-  //text(millis()/1000.0,360,360); //显示计时器
+  text(millis()/1000.0,360,360); //显示计时器
 }
 
 void updateAndDrawBox2D() 
@@ -344,11 +342,11 @@ void updateAndDrawBox2D()
 	//显示人物多边形
 	noStroke();
   
-  fill(89,137,182);  //设置人体颜色
+  fill(100,10,0);  //设置人体颜色
   
   for(int i = 0; i < humanPolygonsList.size(); i++)
   {
-    fill(89,137,182);  //设置人体颜色
+    fill(100,0,0);  //设置人体颜色
     gfx.polygon2D(humanPolygonsList.get(i));
   }
 	
